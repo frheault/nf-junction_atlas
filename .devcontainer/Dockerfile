@@ -49,7 +49,7 @@ ENV NFCORE_SUBWORKFLOWS_BRANCH=main
 ENV PATH="/root/miniconda3/bin:${PATH}"
 RUN arch=$(uname -m) && \
     if [ "$arch" = "x86_64" ]; then \
-    MINICONDA_URL="https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh"; \
+    MINICONDA_URL="https://repo.anaconda.com/miniconda/Miniconda3-py311_25.3.1-1-Linux-x86_64.sh"; \
     elif [ "$arch" = "aarch64" ]; then \
     MINICONDA_URL="https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-aarch64.sh"; \
     else \
@@ -62,6 +62,13 @@ RUN arch=$(uname -m) && \
     rm -f miniconda.sh
 
 # Install nextflow, nf-core, Mamba, and pytest-workflow
+RUN conda install --name=base conda-anaconda-tos
+RUN conda tos accept
+RUN conda tos accept --override-channels --channel bioconda && \
+    conda tos accept --override-channels --channel conda-forge && \
+    conda tos accept --override-channels --channel channel_priority && \
+    conda tos accept --override-channels --channel defaults
+
 RUN conda config --add channels bioconda && \
     conda config --add channels conda-forge && \
     conda config --set channel_priority strict && \
