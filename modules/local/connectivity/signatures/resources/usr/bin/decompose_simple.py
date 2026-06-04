@@ -4,7 +4,6 @@
 import argparse
 import json
 import os
-import tqdm
 
 import itertools
 from dipy.io.streamline import load_tractogram
@@ -55,14 +54,14 @@ def main():
     comb_list = list(itertools.combinations(unique_labels, 2))
     comb_list.extend([(i, i) for i in unique_labels])
 
-    for i, j in tqdm.tqdm(comb_list, desc='Decomposing signatures'):
+    for i, j in comb_list:
         mask = np.logical_or(labels == i, labels == j)
         mode = 'both_ends'
         is_exclude = False
         distance = 0.0
 
-        _, filtered_sft = filter_grid_roi(
-                    sft, mask, mode, is_exclude, distance, return_sft=True)
+        filtered_sft, _ = filter_grid_roi(
+                    sft, mask, mode, is_exclude, distance)
         filtered_sft.to_vox()
         filtered_sft.to_corner()
         density = compute_tract_counts_map(filtered_sft.streamlines,

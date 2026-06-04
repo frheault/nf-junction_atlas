@@ -4,7 +4,7 @@ process PREPROC_TOPUP {
 
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
         'https://scil.usherbrooke.ca/containers/scilus_2.0.2.sif':
-        'scilus/scilus:latest'}"
+        'scilus/scilus:2.0.2'}"
 
 
     input:
