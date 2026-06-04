@@ -1,6 +1,69 @@
 #!/usr/bin/env nextflow
 nextflow.enable.dsl=2
 
+// Pipeline version
+version = '0.1.0'
+
+def helpMessage() {
+    log.info"""
+    nf-junction-atlas v${version}
+    ================================
+
+    Usage:
+    The typical command for running the pipeline is as follows:
+    nextflow run main.nf --input data/ --fs_license license.txt \\
+        --mni_template template/mni_masked.nii.gz \\
+        --ants_template template/t1_template.nii.gz \\
+        --ants_probability_map template/t1_brain_probability_map.nii.gz \\
+        --all_signatures jlf_signatures_final.txt \\
+        --run_freesurfer true -profile singularity -c your_config.config -resume
+
+    Mandatory arguments:
+      --input [path]                Input directory containing your subjects.
+                                    Expected structure:
+                                    input/
+                                    ├── sub-01/
+                                    │   └── ses-01/
+                                    │       ├── *dwi.nii.gz
+                                    │       ├── *dwi.bval
+                                    │       ├── *dwi.bvec
+                                    │       ├── *t1.nii.gz
+                                    │       └── freesurfer/ (Optional: if --run_freesurfer false)
+                                    │           ├── label/
+                                    │           ├── mri/
+                                    │           ├── surf/
+                                    │           ├── [...]
+                                    │           └── touch/
+                                    └── sub-02/
+      --fs_license [path]           Path to the FreeSurfer license file.
+      --mni_template [path]         Path to the MNI template (nii.gz).
+      --ants_template [path]        Path to the ANTS template (nii.gz).
+      --ants_probability_map [path] Path to the ANTS brain probability map (nii.gz).
+      --all_signatures [path]       Path to the file containing all signatures.
+
+    Optional arguments:
+      --run_freesurfer [bool]       Whether to run FreeSurfer recon-all (default: ${params.run_freesurfer}).
+      --output [path]               Directory to publish results (default: '${params.output}').
+      --help                        Display this help message.
+    """.stripIndent()
+}
+
+// Default parameter values
+params.input = false
+params.fs_license = false
+params.mni_template = false
+params.ants_template = false
+params.ants_probability_map = false
+params.all_signatures = false
+params.run_freesurfer = true
+params.output = "results"
+params.help = false
+
+if (params.help) {
+    helpMessage()
+    exit 0
+}
+
 include { TRACTOFLOW } from './subworkflows/nf-neuro/tractoflow/main'
 include { TRACKING_LOCALTRACKING } from './modules/nf-neuro/tracking/localtracking/main'
 
@@ -101,10 +164,6 @@ workflow get_data {
             ? Channel.fromPath(params.all_signatures, checkIfExists: true, followLinks: true)
             : Channel.empty().ifEmpty { error "No all signatures file path provided. Please specify the path using --all_signatures parameter." }
 
-        ch_signatures_mapping = params.signatures_mapping
-            ? Channel.fromPath(params.signatures_mapping, checkIfExists: true, followLinks: true)
-            : Channel.empty().ifEmpty { error "No signatures mapping file path provided. Please specify the path using --signatures_mapping parameter." }
-
     emit:
         dwi = dwi_channel
         anat = t1_channel
@@ -114,7 +173,6 @@ workflow get_data {
         ants_template = ch_ants_template
         ants_probability_map = ch_ants_probability_map
         all_signatures = ch_all_signatures
-        signatures_mapping = ch_signatures_mapping
 }
 
 workflow {
@@ -234,16 +292,10 @@ workflow {
         }
     TRANSFORM_TRACTOGRAM_MNI ( ch_ants_apply_tractogram_to_mni )
 
-    // Now simplify
-    // ch_decompose = TRANSFORM_TRACTOGRAM_MNI.out.warped_tractogram
-    //     .join(TRANSFORM_LABELS_TO_MNI.out.warped_image)
-    // CONNECTIVITY_DECOMPOSE ( ch_decompose )
-
     ch_junction_signatures = TRANSFORM_TRACTOGRAM_MNI.out.warped_tractogram
         .join(TRANSFORM_LABELS_TO_MNI.out.warped_image)
         .join(TRANSFORM_MASK_WM_MNI.out.warped_image)
         .join(TRANSFORM_IMAGE_NUFO_MNI.out.warped_image)
         .combine(inputs.all_signatures)
-        .combine(inputs.signatures_mapping)
     GENERATE_JUNCTION_SIGNATURES ( ch_junction_signatures )
 }

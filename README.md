@@ -1,79 +1,83 @@
 # nf-junction-atlas
 
-`nf-junction-atlas` is a Nextflow pipeline designed for advanced neuroimaging analysis, specifically focusing on the generation of junction signatures and connectivity analysis in MNI space. It integrates `Tractoflow` for diffusion MRI (dMRI) preprocessing and reconstruction, along with anatomical segmentation and registration workflows.
+A Nextflow pipeline for white matter junction signature analysis.
 
-## Features
+## Scientific Context
+This project implements the **White Matter Junction Atlas**, as described in the manuscript *"A Connectivity-Driven Multi-Scale Atlas of the Brain's White Matter Junctions"*. The atlas identifies complex intersections in human white matter where major pathway systems (Association, Projection, Commissural, and Cerebellar) converge and overlap. By mapping these "junction" territories, the atlas provides a framework for understanding white matter organization beyond individually named tracts.
 
-- **Tractoflow Integration**: Automated preprocessing of DWI data (denoising, Gibbs deringing, eddy current correction, topup, etc.) and reconstruction (DTI, fODF).
-- **Anatomical Segmentation**: Optional FreeSurfer `recon-all` integration and automated generation of lobes parcellations.
-- **Registration**: Robust registration of anatomical and diffusion data to MNI space using ANTs.
-- **Tractography**: Local tracking with customizable parameters.
-- **Connectivity Analysis**: Generation of junction signatures using warped tractograms and parcellations in MNI space.
+## Workflow Overview
+Characterizing white matter junctions is a two-step process in this repository:
 
-## Prerequisites
+1.  **Core Pipeline (`main.nf`):** This Nextflow pipeline automates the extensive preprocessing required, including:
+    -   Anatomical and Diffusion MRI preprocessing (via [Tractoflow](https://github.com/scilus/tractoflow)).
+    -   Cortical and subcortical parcellation (via FreeSurfer).
+    -   Registration of all data to MNI152 space.
+    -   Generation of voxel-wise connectivity signatures and the base junction label volume (`*__junction_labels.nii.gz`).
+2.  **Post-Processing (`junction_labeler.py`):** This script takes the junction label volume produced by the pipeline and parcellates it into hierarchical classes (Broad, Simplified, Full, and Anatomical Lobes) for detailed analysis.
 
-- [Nextflow](https://www.nextflow.io/docs/latest/getstarted.html#installation) (>= 22.10.0)
-- [Docker](https://docs.docker.com/engine/installation/) or [Singularity/Apptainer](https://apptainer.org/docs/user/main/quick_start.html#quick-installation)
-- A FreeSurfer license file (if running `recon-all`).
+## Requirements
+- Nextflow (>= 22.10.0)
+- Singularity or Docker
+- FreeSurfer License (obtainable from [FreeSurfer's website](https://surfer.nmr.mgh.harvard.edu/registration.html))
 
 ## Usage
 
-To run the pipeline, use the following command:
+### 1. Run the Nextflow Pipeline
+Use the following command to run the core pipeline. **Note:** You must provide the path to your own FreeSurfer license file.
 
 ```bash
 nextflow run main.nf \
-    --input /path/to/data \
-    --fs_license /path/to/license.txt \
-    --mni_template /path/to/mni_template.nii.gz \
-    --ants_template /path/to/ants_template.nii.gz \
-    --ants_probability_map /path/to/ants_prob_map.nii.gz \
-    --all_signatures /path/to/all_signatures.json \
-    --signatures_mapping /path/to/mapping.json \
-    -profile docker
+    --input test/raw \
+    --fs_license /path/to/your/license.txt \
+    --mni_template test/template/mni_masked.nii.gz \
+    --ants_template test/template/t1_template.nii.gz \
+    --ants_probability_map test/template/t1_brain_probability_map.nii.gz \
+    --all_signatures test/jlf_signatures_final.txt \
+    -profile docker \
+    -resume
 ```
 
-### Input Data Structure
+### 2. Run the Junction Labeler
+After the pipeline completes, the junction label volumes are published in the `results` directory. Run the post-processing script on these volumes:
 
-The pipeline expects a BIDS-like input directory structure:
+```bash
+# Example for subject sub-003, session ses-01
+python junction_labeler.py \
+    results/sub-003_ses-01/GENERATE_JUNCTION_SIGNATURES/sub-003_ses-01__junction_labels.nii.gz \
+    --outdir results/sub-003_ses-01/JUNCTION_HIERARCHY
+```
 
-```text
+**Output Structure:**
+- `Class-4/`: Broad pathway systems (Asso, Proj, Comm, Cereb).
+- `Class-9/`: Inter-system junction classes.
+- `Class-31/`: Intra-system overlap and bottleneck classes.
+- `Class-lobes/`: 15 anatomical lobe parcellations.
+
+## Parameters
+
+| Parameter | Description |
+| --- | --- |
+| `--input` | Path to the directory containing subject data in a BIDS-like structure. |
+| `--fs_license` | Path to your FreeSurfer license file. |
+| `--mni_template` | Path to the MNI152 template. |
+| `--ants_template` | Path to the T1 template for ANTs registration. |
+| `--ants_probability_map` | Path to the T1 brain probability map for ANTs. |
+| `--all_signatures` | Path to the text file containing the junction signatures list. |
+| `--run_freesurfer` | Set to `true` to run FreeSurfer `recon-all` (default), or `false` if you already have the outputs. |
+| `--output` | Directory to publish results (default: `results`). |
+
+## Input Data Structure
+The `--input` directory should be organized as follows:
+```
 input/
 ├── sub-01/
 │   └── ses-01/
-│       ├── sub-01_ses-01_dwi.nii.gz
-│       ├── sub-01_ses-01_dwi.bval
-│       ├── sub-01_ses-01_dwi.bvec
-│       ├── sub-01_ses-01_t1.nii.gz
-│       └── freesurfer/ (optional)
-└── sub-02/
-    └── ...
+│       ├── *dwi.nii.gz
+│       ├── *dwi.bval
+│       ├── *dwi.bvec
+│       ├── *t1.nii.gz
+│       └── freesurfer/ (Optional: if --run_freesurfer false)
 ```
 
-## Pipeline Steps
-
-1.  **Data Loading**: Automatically identifies DWI and T1 files for each subject/session.
-2.  **Segmentation**: Runs FreeSurfer `recon-all` (optional) or uses existing outputs to generate parcellations.
-3.  **Tractoflow**: Processes dMRI data, including:
-    *   Denoising and Gibbs deringing.
-    *   Eddy current and Topup correction.
-    *   DTI and fODF reconstruction.
-    *   Registration of T1 to DWI space.
-4.  **Tracking**: Performs local tracking using the reconstructed fODF and WM masks.
-5.  **MNI Registration**: Registers the subjects' T1 (in DWI space) to the provided MNI template.
-6.  **Transformation**: Warps all relevant images (FA, MD, NUFO, AFD, labels) and the tractogram into MNI space.
-7.  **Connectivity Signatures**: Generates junction signatures using the standardized data in MNI space.
-
-## Configuration
-
-Default parameters are defined in `nextflow.config`. You can override them via the command line or by providing a custom configuration file.
-
-Key parameters include:
-- `run_freesurfer`: Whether to run FreeSurfer (default: `true`).
-- `output`: Directory to store results (default: `results`).
-- `dti_max_bvalue`: Maximum b-value for DTI fitting.
-- `fodf_sh_order`: Spherical harmonics order for fODF.
-- `run_local_tracking`: Enable/disable local tracking.
-
 ## Credits
-
-This pipeline is developed and maintained by the Scilus group. It builds upon several open-source tools and libraries, including Nextflow, ANTs, MRtrix3, and the nf-core framework.
+This pipeline uses modules and subworkflows from [nf-neuro](https://github.com/nf-neuro/modules).
