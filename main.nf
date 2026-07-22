@@ -135,10 +135,13 @@ workflow get_data {
         dwi_channel = Channel.fromFilePairs("$input/*/*/*dwi.{nii.gz,bval,bvec}", size: 3, flat: true)
             { it.parent.parent.name + "_" + it.parent.name} // Set the subject filename as subjectID + '_' + session.
             .map{ sid, bvals, bvecs, dwi -> [ [id: sid], dwi, bvals, bvecs ] } // Reordering the inputs.
+            .ifEmpty { error "No DWI files found in $input. Ensure files match the structure: sub-*/ses-*/*dwi.{nii.gz,bval,bvec}" }
+        
         // ** Loading T1 file. ** //
         t1_channel = Channel.fromFilePairs("$input/*/*/*t1.nii.gz", size: 1, flat: true)
             { it.parent.parent.name + "_" + it.parent.name } // Set the subject filename as subjectID + '_' + session.
             .map{ sid, t1 -> [ [id: sid], t1 ] }
+            .ifEmpty { error "No T1 files found in $input. Ensure files match the structure: sub-*/ses-*/*t1.nii.gz" }
 
         fs_channel = Channel.fromFilePairs("$input/*/*/freesurfer/", size: 1, flat: true, type: 'dir')
             { it.parent.parent.name + "_" + it.parent.name } // Set the subject filename as subjectID + '_' + session.
