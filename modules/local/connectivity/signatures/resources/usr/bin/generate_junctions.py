@@ -4,7 +4,6 @@
 import argparse
 import json
 import os
-import tqdm
 from glob import glob
 
 import nibabel as nib
@@ -35,7 +34,7 @@ def _build_arg_parser():
                    help='Input WM mask file.')
     p.add_argument('out_labels',
                    help='Output directory to save the results.')
-    
+
     p.add_argument('--only_signatures', action='store_true',
                    help='If set, only the signatures will be processed '
                         'and saved, skipping the labels generation.')
@@ -57,7 +56,7 @@ def main():
         basename, ext = os.path.splitext(os.path.basename(args.out_labels))
         if ext == '.gz':
             basename, ext = os.path.splitext(os.path.basename(basename))
-        
+
         if os.path.isfile(f"{basename}_signature.txt"):
             raise FileExistsError(
                 f"Signature file {basename}_signature.txt already exists. "
@@ -98,7 +97,7 @@ def main():
     print("Grabbing TDI files...")
     count = 0
     comb_list = np.triu_indices(15, k=0)
-    for id_1, id_2 in tqdm.tqdm(zip(*comb_list), total=len(comb_list[0])):
+    for id_1, id_2 in zip(*comb_list):
         tdi_path = os.path.join(args.in_dir, f'{id_1+1}_{id_2+1}.nii.gz')
 
         if not os.path.isfile(tdi_path):
@@ -123,8 +122,7 @@ def main():
     print("Normalizing TDI files...")
     THR = 0.10
     mask_sum = np.sum(tdi_data, axis=-1).astype(float)
-    for ind in tqdm.tqdm(np.argwhere(mask_sum > 0),
-                         total=np.count_nonzero(mask_sum > 0)):
+    for ind in np.argwhere(mask_sum > 0):
         ind = tuple(ind)
         tmp_tdi_data = tdi_data[ind] / mask_sum[ind]
         tmp_tdi_data[tmp_tdi_data < THR] = 0
@@ -133,7 +131,7 @@ def main():
             tmp_tdi_data[:] = 0
         else:
             tmp_tdi_data /= tmp_sum
-        
+
         # This should be ceil to ensure integer values (binarize)
         tdi_data[ind] = np.ceil(tmp_tdi_data)
 
@@ -161,7 +159,7 @@ def main():
         # Filter signatures based on the sum of the signature
         D = cdist(signature.reshape(1, -1), all_signatures,
                   metric='cityblock')[0]
-        
+
         best_val = np.min(D)
         # If the best match is too high, return -1
         if best_val > curr_sum // 2:
@@ -178,7 +176,7 @@ def main():
     # Voxel-wise processing of signatures
     print("Processing signatures...")
     unique_signatures_count = {}
-    for pos in tqdm.tqdm(range(num_voxels), total=num_voxels):
+    for pos in range(num_voxels):
         curr_signature = tdi_data[pos]
         if args.only_signatures:
             # If only signatures are processed, save them directly
@@ -198,7 +196,7 @@ def main():
             basename, ext = os.path.splitext(os.path.basename(basename))
         np.savetxt(f"{basename}_signature.txt",
                    unique_signatures, fmt='%d', delimiter=' ')
-        
+
         tmp_dict = {}
         for key in unique_signatures_count:
             str_key = ' '.join(map(str, key))
@@ -220,7 +218,7 @@ def main():
         min_voxel_count = 6
         voxel_to_remove = np.ones_like(labels, dtype=np.uint8)
 
-        for label_id in tqdm.tqdm(np.unique(labels)[1:]):
+        for label_id in np.unique(labels)[1:]:
             curr_data = np.zeros_like(labels, dtype=np.uint8)
             curr_data[labels == label_id] = 1
             components, nb_structures = ndi.label(curr_data)

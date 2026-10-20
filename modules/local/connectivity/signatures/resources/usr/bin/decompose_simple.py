@@ -9,7 +9,6 @@ from dipy.io.streamline import load_tractogram
 import nibabel as nib
 import numpy as np
 from scipy.ndimage import map_coordinates
-import tqdm
 
 from scilpy.io.utils import (add_overwrite_arg,
                              add_verbose_arg,
@@ -79,7 +78,7 @@ def main():
         min_labels = np.array([], dtype=np.uint16)
         max_labels = np.array([], dtype=np.uint16)
 
-    for i, j in tqdm.tqdm(comb_list, desc='Decomposing signatures'):
+    for i, j in comb_list:
         indices = np.where((min_labels == i) & (max_labels == j))[0]
         if len(indices) > 0:
             filtered_sft = sft[indices]
